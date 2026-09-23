@@ -46,17 +46,7 @@ const getMyClinicId = async () => {
     let clinic_id = null;
     const { data: rpcClinic } = await supabase.rpc('get_auth_clinic_id')
     if (rpcClinic) clinic_id = rpcClinic
-    if (!clinic_id) {
-      const { data: sessionData } = await supabase.auth.getUser()
-      if (sessionData?.user?.user_metadata?.clinic_id) {
-        clinic_id = sessionData.user.user_metadata.clinic_id
-      }
-    }
-    if (!clinic_id) {
-      const { data: leadData } = await supabase.from('leads').select('clinic_id').limit(1).single()
-      if (leadData) clinic_id = leadData.clinic_id
-    }
-    if (!clinic_id) return 'public-view' // Fim do Multi-Tenant: Fallback global aberto
+    if (!clinic_id) throw new Error('Usuário sem imobiliária vinculada')
     return clinic_id
 }
 
@@ -264,7 +254,7 @@ const exportCSV = async (filterType: string) => {
   isSaving.value = true
   try {
     let query = supabase.from('leads').select('*, corretores(nome)')
-    let filename = 'leads_esplendor'
+    let filename = 'leads_jrv'
 
     if (filterType === 'perdidos') {
       query = query.or('stage.eq.perdido,situacao_nome.eq.perdido,estagiokanbam.eq.perdido')

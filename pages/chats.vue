@@ -170,7 +170,8 @@ const fetchChats = async () => {
     if (error) throw error
 
     // Fetch latest messages for sidelist
-    const { data: allChats } = await supabase.from('n8n_chat_histories').select('session_id, message, id').order('id', { ascending: false })
+    const { data: allChats, error: chatHistoryError } = await supabase.rpc('get_secure_chat_histories', { p_session_id: null })
+    if (chatHistoryError) throw chatHistoryError
     
     const latestMsgs: Record<string, any> = {}
     if (allChats) {
@@ -228,15 +229,12 @@ const fetchChats = async () => {
 }
 
 // Fetch Messages for selected chat
-const fetchMessages = async (chatId: string) => {
-  messagesLoading.value = true
+const fetchMessages = async (chatId: string, silent = false) => {
+  if (!silent) messagesLoading.value = true
   showSummary.value = false
   summaryText.value = ''
   try {
-    const { data, error } = await supabase.from('n8n_chat_histories')
-      .select('*')
-      .eq('session_id', chatId)
-      .order('id', { ascending: true })
+    const { data, error } = await supabase.rpc('get_secure_chat_histories', { p_session_id: chatId })
       
     if (error) throw error
     
@@ -267,7 +265,7 @@ const fetchMessages = async (chatId: string) => {
   } catch (e) {
     console.error('Error fetching messages', e)
   } finally {
-    messagesLoading.value = false
+    if (!silent) messagesLoading.value = false
   }
 }
 
@@ -290,7 +288,8 @@ const scrollToBottom = async () => {
   }, 150)
 }
 
-let realtimeChannel: any
+let chatPollingTimer: ReturnType<typeof setInterval> | null = null
+let latestMessageId: number | null = null
 
 const playNotificationSound = () => {
     try {
@@ -300,53 +299,18 @@ const playNotificationSound = () => {
     } catch(e) {}
 }
 
-const setupRealtime = () => {
-  realtimeChannel = supabase.channel('chat_updates')
-    .on(
-      'postgres_changes',
-      { event: 'INSERT', schema: 'public', table: 'n8n_chat_histories' },
-      async (payload) => {
-        const row = payload.new
-        
-        // Toca notificação quando qualquer mensagem for inserida via n8n
-        playNotificationSound()
-
-        // Update current active chat window
-        if (selectedChat.value && row.session_id === selectedChat.value.id) {
-          let rawMsg = row.message || {}
-          if (typeof rawMsg === 'string') {
-            try { rawMsg = JSON.parse(rawMsg) } catch(e) {}
-          }
-          const realData = rawMsg.data || rawMsg
-          const parsed = parseMessage(realData)
-          
-          messages.value.push({
-            id: row.id,
-            sender: (realData.type === 'ai' || realData.id?.includes('AIMessage')) ? 'me' : 'user',
-            text: parsed.text,
-            isSystem: parsed.isSystem,
-            systemAction: parsed.systemAction,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            type: parsed.type
-          })
-          scrollToBottom()
-        }
-
-        // Update Sidebar lastMessage
-        const chatIdx = chats.value.findIndex(c => c.id === row.session_id)
-        if (chatIdx !== -1) {
-           let rawMsg = row.message || {}
-           if (typeof rawMsg === 'string') {
-             try { rawMsg = JSON.parse(rawMsg) } catch(e) {}
-           }
-           const realData = rawMsg.data || rawMsg
-           const parsed = parseMessage(realData)
-           chats.value[chatIdx].lastMessage = parsed.text || 'Conversa iniciada...'
-           chats.value[chatIdx].lastSender = (realData.type === 'ai' || realData.id?.includes('AIMessage')) ? 'me' : 'user'
-        }
-      }
-    )
-    .subscribe()
+const setupSecurePolling = () => {
+  chatPollingTimer = setInterval(async () => {
+    if (!selectedChat.value || document.visibilityState !== 'visible') return
+    const previousId = messages.value.length ? Number(messages.value[messages.value.length - 1]?.id) : null
+    await fetchMessages(selectedChat.value.id, true)
+    const currentId = messages.value.length ? Number(messages.value[messages.value.length - 1]?.id) : null
+    if (latestMessageId !== null && currentId && currentId > latestMessageId && currentId !== previousId) {
+      playNotificationSound()
+      scrollToBottom()
+    }
+    latestMessageId = currentId
+  }, 5000)
 }
 
 // Generate Summary
@@ -443,13 +407,11 @@ const updateStatus = async () => {
 
 onMounted(() => {
   fetchChats()
-  setupRealtime()
+  setupSecurePolling()
 })
 
 onUnmounted(() => {
-  if (realtimeChannel) {
-    supabase.removeChannel(realtimeChannel)
-  }
+  if (chatPollingTimer) clearInterval(chatPollingTimer)
 })
 </script>
 

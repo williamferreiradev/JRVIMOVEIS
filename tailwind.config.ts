@@ -20,7 +20,7 @@ export default <Partial<Config>>{
       },
       colors: {
         primary: {
-          DEFAULT: '#0A3D8F', // Azul Royal Esplendor Imóveis
+          DEFAULT: '#0A3D8F', // Azul Royal JRV Imóveis
           50: '#F0F5FF',
           100: '#E1ECFE',
           200: '#C7DAFE',
@@ -42,7 +42,7 @@ export default <Partial<Config>>{
           muted: '#94A3B8'     // Texto secundário
         },
         accent: {
-          DEFAULT: '#C8A261',  // Dourado Champagne Esplendor
+          DEFAULT: '#C8A261',  // Dourado Champagne JRV
           50: '#FAF7F0',
           100: '#F4EEDB',
           200: '#E9DCB8',

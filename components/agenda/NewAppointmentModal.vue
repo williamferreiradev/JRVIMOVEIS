@@ -168,10 +168,6 @@ const resolveClinicId = async (leadClinicId?: string) => {
     const { data: rpcClinic } = await supabase.rpc('get_auth_clinic_id')
     if (rpcClinic) return rpcClinic
   } catch {}
-  try {
-    const { data: leadData } = await supabase.from('leads').select('clinic_id').not('clinic_id', 'is', null).limit(1).single()
-    if (leadData?.clinic_id) return leadData.clinic_id
-  } catch {}
   return null
 }
 

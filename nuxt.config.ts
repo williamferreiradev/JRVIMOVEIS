@@ -1,7 +1,29 @@
+import { join } from 'node:path'
+
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
+  buildDir: join(process.cwd(), 'node_modules', '.cache', 'nuxt', '.nuxt'),
   devtools: { enabled: false },
+  vite: {
+    server: {
+      watch: {
+        ignored: ['**/.dev-logs/**'],
+      },
+    },
+    optimizeDeps: {
+      exclude: [
+        '@supabase/supabase-js',
+        '@supabase/auth-js',
+        '@supabase/functions-js',
+        '@supabase/realtime-js',
+        '@supabase/storage-js',
+        'lucide-vue-next',
+        'swiper',
+        'vue-draggable-plus',
+      ],
+    },
+  },
   modules: ['@nuxtjs/tailwindcss', '@nuxtjs/supabase'],
   supabase: {
     useSsrCookies: true,
@@ -9,13 +31,13 @@ export default defineNuxtConfig({
     redirectOptions: {
       login: '/login',
       callback: '/confirm',
-      exclude: ['/cadastro', '/catalogo', '/catalogo/**', '/_nuxt/**', '/favicon.ico'],
+      exclude: ['/catalogo', '/catalogo/**', '/_nuxt/**', '/favicon.ico'],
       saveRedirectToCookie: true,
     },
     cookieOptions: {
       maxAge: 60 * 60 * 8,
       sameSite: 'lax',
-      secure: true,
+      secure: process.env.NODE_ENV === 'production',
     },
   },
   app: {

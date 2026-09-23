@@ -38,7 +38,7 @@ definePageMeta({
             <ArrowLeft class="w-4 h-4" />
             Voltar ao Portfólio
           </NuxtLink>
-          <h1 class="text-xl font-bold tracking-widest uppercase font-serif text-white">ESPLENDOR</h1>
+          <h1 class="text-xl font-bold tracking-widest uppercase font-serif text-white">JRV</h1>
         </div>
       </header>
 

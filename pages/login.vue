@@ -3,7 +3,7 @@
     <!-- Right Side - Branding (Real Estate Layout) -->
     <div class="hidden lg:flex lg:w-1/2 relative bg-gray-50 overflow-hidden order-last">
       <!-- Background Image - Use property/house image (user needs to change this locally) -->
-      <img src="/images/login-bg.png" alt="Esplendor Imóveis CRM" class="absolute inset-0 w-full h-full object-cover object-center mix-blend-multiply opacity-30 grayscale-[50%]" />
+      <img src="/images/login-bg.png" alt="JRV Imóveis CRM" class="absolute inset-0 w-full h-full object-cover object-center mix-blend-multiply opacity-30 grayscale-[50%]" />
       
       <!-- Overlay Gradient - Blue & Yellow aesthetic -->
       <div class="absolute inset-0 bg-gradient-to-tr from-primary-900/90 via-primary-700/80 to-transparent mix-blend-multiply pointer-events-none"></div>
@@ -16,7 +16,7 @@
       <div class="relative z-10 w-full p-12 flex flex-col justify-between h-full items-end text-right">
         <div>
           <h1 class="text-4xl lg:text-5xl font-black text-white tracking-widest uppercase drop-shadow-md">
-            ESPLENDOR<span class="text-accent ml-2">IMÓVEIS</span>
+            JRV<span class="text-accent ml-2">IMÓVEIS</span>
           </h1>
           <div class="h-1.5 w-32 bg-accent mt-4 rounded-full shadow-[0_0_15px_rgba(200,162,97,0.8)] ml-auto"></div>
         </div>
@@ -48,7 +48,7 @@
              <span class="text-primary-600 font-bold text-3xl">E</span>
           </div>
           <h2 class="text-3xl font-black text-gray-900 tracking-tight uppercase">Bem-vindo(a)</h2>
-          <p class="text-gray-500 font-medium">Acesse o CRM da Esplendor Imóveis</p>
+          <p class="text-gray-500 font-medium">Acesse o CRM da JRV Imóveis</p>
         </div>
 
         <!-- Form -->
@@ -57,7 +57,7 @@
             <BaseInput 
               v-model="form.email"
               label="E-mail do Corretor"
-              placeholder="corretor@esplendorimoveis.com.br"
+              placeholder="corretor@jrvimoveis.com.br"
               type="email"
               :disabled="loading"
             />
@@ -79,8 +79,8 @@
 
         <!-- Footer -->
         <div class="text-center text-sm text-gray-500 mt-8 pt-8 border-t border-gray-100">
-          Não possui credenciais? 
-          <NuxtLink to="/cadastro" class="font-bold text-primary-600 hover:text-primary-700 transition-colors">Solicite à Gerência</NuxtLink>
+          Não possui credenciais?
+          <span class="font-bold text-primary-600">Solicite à Gerência</span>
         </div>
       </div>
     </div>
@@ -98,10 +98,18 @@ definePageMeta({
 const supabase = useSupabaseClient()
 const user = useSupabaseUser()
 
+const openDashboard = async () => {
+  if (import.meta.client) {
+    window.location.replace('/dashboard')
+    return
+  }
+  await navigateTo('/dashboard', { replace: true })
+}
+
 // Se já estiver logado, redireciona diretamente ao painel
 watch(user, (currentUser) => {
   if (currentUser) {
-    navigateTo('/dashboard', { replace: true })
+    openDashboard()
   }
 }, { immediate: true })
 
@@ -132,7 +140,7 @@ const handleLogin = async () => {
     feedback.type = 'success'
     feedback.message = 'Acesso liberado! Carregando painel...'
     
-    await navigateTo('/dashboard', { replace: true })
+    await openDashboard()
   } catch (e: any) {
     feedback.type = 'error'
     feedback.message = e.message || 'Credenciais inválidas. Tente novamente.'

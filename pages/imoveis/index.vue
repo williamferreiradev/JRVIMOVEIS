@@ -17,7 +17,7 @@ definePageMeta({
     <!-- Navbar Minimalista -->
     <header class="fixed top-0 inset-x-0 z-50 bg-dark-bg/80 backdrop-blur-md border-b border-white/5 transition-all duration-300">
       <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-        <h1 class="text-2xl font-bold tracking-widest uppercase font-serif">ESPLENDOR</h1>
+        <h1 class="text-2xl font-bold tracking-widest uppercase font-serif">JRV</h1>
         
         <nav class="hidden md:flex items-center gap-8">
           <a href="#" class="text-sm tracking-widest uppercase text-gray-400 hover:text-white transition-colors">Portfólio</a>

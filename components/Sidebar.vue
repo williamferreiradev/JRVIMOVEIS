@@ -71,13 +71,7 @@ const fetchClinicId = async () => {
     const { data: rpcData } = await supabase.rpc('get_auth_clinic_id')
     if (rpcData) { clinicId.value = rpcData; return }
 
-    const { data: sessionData } = await supabase.auth.getUser()
-    if (sessionData?.user?.user_metadata?.clinic_id) {
-      clinicId.value = sessionData.user.user_metadata.clinic_id; return
-    }
-
-    const { data: leadData } = await supabase.from('leads').select('clinic_id').limit(1).single()
-    if (leadData) clinicId.value = leadData.clinic_id
+    clinicId.value = null
   } catch (err) {
     console.error('Erro ao buscar clinic_id:', err)
   }
@@ -142,7 +136,7 @@ const handleLogout = async () => {
         <Building class="w-4 h-4 text-white" />
       </div>
       <div>
-        <span class="text-gray-900 dark:text-white font-black text-sm tracking-tight block leading-none">ESPLENDOR</span>
+        <span class="text-gray-900 dark:text-white font-black text-sm tracking-tight block leading-none">JRV</span>
         <span class="text-[9px] text-gray-400 dark:text-dark-muted font-semibold uppercase tracking-widest">Imóveis</span>
       </div>
     </div>
@@ -181,7 +175,7 @@ const handleLogout = async () => {
             <Building class="w-4 h-4 text-white" />
          </div>
          <div v-if="showLabels" class="sidebar-text-transition overflow-hidden">
-           <span class="text-gray-900 dark:text-white font-black text-base tracking-tight block whitespace-nowrap leading-none">ESPLENDOR</span>
+           <span class="text-gray-900 dark:text-white font-black text-base tracking-tight block whitespace-nowrap leading-none">JRV</span>
            <span class="text-[10px] text-gray-400 dark:text-dark-muted font-semibold whitespace-nowrap uppercase tracking-widest leading-none mt-0.5 block">Imóveis</span>
          </div>
       </div>

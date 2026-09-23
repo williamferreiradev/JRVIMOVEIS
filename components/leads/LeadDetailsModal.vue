@@ -312,7 +312,7 @@ const docStatusConfig = computed(() => {
 })
 
 // Webhook n8n para notificação de status de CPF / Financiamento
-const WEBHOOK_URL = 'https://n8n.srv1098076.hstgr.cloud/webhook/statuscpfesplendor'
+const WEBHOOK_URL = 'https://n8n.srv1098076.hstgr.cloud/webhook/statuscpfjrv'
 
 const sendStatusWebhook = async (lead: Cliente, status: 'aprovado' | 'rejeitado', motivo?: string | null) => {
   try {
