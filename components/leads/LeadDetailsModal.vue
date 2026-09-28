@@ -20,7 +20,8 @@ import {
   AlertCircle, 
   FileText,
   FileCheck,
-  Building
+  Building,
+  Check
 } from 'lucide-vue-next'
 import type { Cliente } from '@/types/crm'
 import { useSupabaseClient } from '#imports'
@@ -44,6 +45,8 @@ const isUpdatingDoc = ref(false)
 const showRejectReason = ref(false)
 const rejectReason = ref('')
 const actionSuccessMsg = ref<string | null>(null)
+const localModalidade = ref<'agio' | 'aluguel' | null>(null)
+const isUpdatingModalidade = ref(false)
 
 // Lista de documentos conhecidos com nome amigável e campos correspondentes
 const knownDocuments = computed(() => {
@@ -107,6 +110,9 @@ watch(() => props.lead, (newLead) => {
     rejectReason.value = newLead.motivostatus || ''
     showRejectReason.value = false
     actionSuccessMsg.value = null
+    localModalidade.value = newLead.modalidade === 'agio' || newLead.modalidade === 'aluguel'
+      ? newLead.modalidade
+      : null
   }
 }, { immediate: true })
 
@@ -123,6 +129,36 @@ const handleCancelNotes = () => {
 const handleSaveNotes = async () => {
   if (!props.lead) return
   emit('save-notes', props.lead.id, localNotes.value)
+}
+
+const toggleModalidade = async (modalidade: 'agio' | 'aluguel') => {
+  if (!props.lead || isUpdatingModalidade.value) return
+
+  const previousModalidade = localModalidade.value
+  const nextModalidade = previousModalidade === modalidade ? null : modalidade
+  localModalidade.value = nextModalidade
+  isUpdatingModalidade.value = true
+
+  try {
+    const { error } = await supabase
+      .from('leads')
+      .update({ modalidade: nextModalidade })
+      .eq('id', props.lead.id)
+
+    if (error) throw error
+
+    props.lead.modalidade = nextModalidade
+    actionSuccessMsg.value = nextModalidade
+      ? `Modalidade atualizada para ${nextModalidade === 'agio' ? 'ágio' : 'aluguel'}.`
+      : 'Modalidade removida.'
+    setTimeout(() => { actionSuccessMsg.value = null }, 3000)
+  } catch (error) {
+    localModalidade.value = previousModalidade
+    console.error('Erro ao atualizar modalidade do lead:', error)
+    alert('Não foi possível atualizar a modalidade do lead.')
+  } finally {
+    isUpdatingModalidade.value = false
+  }
 }
 
 // Formatação de CPF
@@ -142,6 +178,81 @@ const formatCurrency = (val?: number | bigint | string | null) => {
   if (isNaN(num)) return String(val)
   return num.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
+
+const formatOption = (value?: string | null) => {
+  if (!value) return 'Não informado'
+  const labels: Record<string, string> = {
+    a_vista: 'À vista',
+    financiamento: 'Financiamento',
+    morar: 'Morar',
+    investir: 'Investir',
+    compra: 'Compra',
+    aluguel: 'Aluguel',
+    agio: 'Ágio',
+    quente: 'Quente',
+    morno: 'Morno',
+    nutricao: 'Nutrição',
+    sem_perfil_definido: 'Sem perfil definido'
+  }
+  return labels[value] || value.replace(/_/g, ' ').replace(/^\w/, letter => letter.toUpperCase())
+}
+
+const formatBoolean = (value?: boolean | null) => {
+  if (value === null || value === undefined) return 'Não informado'
+  return value ? 'Sim' : 'Não'
+}
+
+const complementarySections = computed(() => {
+  const lead = props.lead
+  if (!lead) return []
+
+  return [
+    {
+      title: 'Contato & Origem',
+      items: [
+        { label: 'E-mail', value: lead.email || 'Não informado' },
+        { label: 'Origem do lead', value: formatOption(lead.source) },
+        { label: 'Situação', value: formatOption(lead.situacao_nome || lead.stage) },
+        { label: 'Última mensagem', value: lead.ultima_mensagem_at ? formatDate(lead.ultima_mensagem_at) : 'Não informada' }
+      ]
+    },
+    {
+      title: 'Interesse no Imóvel',
+      items: [
+        { label: 'Modalidade', value: formatOption(lead.modalidade) },
+        { label: 'Forma de pagamento', value: formatOption(lead.forma_pagamento) },
+        { label: 'Finalidade', value: formatOption(lead.finalidade) },
+        { label: 'Quartos', value: lead.quartos ?? 'Não informado' },
+        { label: 'Orçamento máximo', value: formatCurrency(lead.orcamento_maximo) },
+        { label: 'Prazo de interesse', value: formatOption(lead.prazo_interesse) }
+      ]
+    },
+    {
+      title: 'Capacidade Financeira',
+      items: [
+        { label: 'Renda familiar', value: formatCurrency(lead.renda_familiar) },
+        { label: 'Valor de entrada', value: formatCurrency(lead.valor_entrada) },
+        { label: 'Possui FGTS', value: formatBoolean(lead.possui_fgts) },
+        { label: 'Saldo do FGTS', value: formatCurrency(lead.saldo_fgts) },
+        { label: 'Compõe renda', value: formatBoolean(lead.compoe_renda) },
+        { label: 'Nº de compradores', value: lead.numero_compradores ?? 'Não informado' },
+        { label: 'Tempo de trabalho', value: formatOption(lead.tempo_trabalho) },
+        { label: 'Valor esperado', value: formatCurrency(lead.expected_value) }
+      ]
+    },
+    {
+      title: 'Acompanhamento Comercial',
+      items: [
+        { label: 'Temperatura', value: formatOption(lead.temperatura) },
+        { label: 'Motivo da temperatura', value: lead.motivo_temperatura || 'Não informado' },
+        { label: 'Próxima ação', value: lead.proxima_acao || 'Não informada' },
+        { label: 'Melhor horário', value: lead.melhor_horario_contato || 'Não informado' },
+        { label: 'Handoff', value: lead.dataHandoff ? formatDate(lead.dataHandoff) : 'Não realizado' },
+        { label: 'Último follow-up', value: lead.last_mensagem_followup_at ? formatDate(lead.last_mensagem_followup_at) : 'Não realizado' }
+      ]
+    }
+  ]
+})
 
 const formatDate = (dateString?: string) => {
   if (!dateString) return 'Desconhecido'
@@ -523,6 +634,60 @@ const handleSetPending = async () => {
               </div>
             </div>
 
+            <!-- Modalidade de interesse -->
+            <fieldset class="space-y-2">
+              <legend class="text-xs font-bold text-gray-400 dark:text-dark-muted uppercase tracking-wider">
+                Modalidade de interesse
+              </legend>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 min-h-12">
+                <Transition name="deal-option">
+                  <button
+                    v-if="localModalidade !== 'aluguel'"
+                    type="button"
+                    :disabled="isUpdatingModalidade"
+                    :aria-pressed="localModalidade === 'agio'"
+                    class="flex min-h-12 items-center gap-3 rounded-xl border px-4 py-3 text-left transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-60 dark:focus-visible:ring-offset-dark-surface"
+                    :class="localModalidade === 'agio'
+                      ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-500/15 dark:text-primary-300'
+                      : 'border-gray-200 bg-gray-50/70 text-gray-700 hover:border-primary-300 dark:border-dark-border dark:bg-dark-bg/60 dark:text-gray-200 dark:hover:border-primary-500/60'"
+                    @click="toggleModalidade('agio')"
+                  >
+                    <span
+                      class="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border transition-colors duration-200"
+                      :class="localModalidade === 'agio' ? 'border-primary-500 bg-primary-500 text-white' : 'border-gray-300 bg-white text-transparent dark:border-white/20 dark:bg-dark-surface'"
+                      aria-hidden="true"
+                    >
+                      <Check class="h-4 w-4" />
+                    </span>
+                    <span class="text-sm font-bold uppercase tracking-wider">É ágio?</span>
+                  </button>
+                </Transition>
+
+                <Transition name="deal-option">
+                  <button
+                    v-if="localModalidade !== 'agio'"
+                    type="button"
+                    :disabled="isUpdatingModalidade"
+                    :aria-pressed="localModalidade === 'aluguel'"
+                    class="flex min-h-12 items-center gap-3 rounded-xl border px-4 py-3 text-left transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-60 dark:focus-visible:ring-offset-dark-surface"
+                    :class="localModalidade === 'aluguel'
+                      ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-500/15 dark:text-primary-300'
+                      : 'border-gray-200 bg-gray-50/70 text-gray-700 hover:border-primary-300 dark:border-dark-border dark:bg-dark-bg/60 dark:text-gray-200 dark:hover:border-primary-500/60'"
+                    @click="toggleModalidade('aluguel')"
+                  >
+                    <span
+                      class="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border transition-colors duration-200"
+                      :class="localModalidade === 'aluguel' ? 'border-primary-500 bg-primary-500 text-white' : 'border-gray-300 bg-white text-transparent dark:border-white/20 dark:bg-dark-surface'"
+                      aria-hidden="true"
+                    >
+                      <Check class="h-4 w-4" />
+                    </span>
+                    <span class="text-sm font-bold uppercase tracking-wider">É aluguel?</span>
+                  </button>
+                </Transition>
+              </div>
+            </fieldset>
+
             <!-- DECISION ACTION BOX: APROVAR OU REJEITAR FINANCIAMENTO -->
             <div class="p-4 sm:p-5 rounded-2xl border transition-all" :class="[
               lead.statusdoc === 'esperando' 
@@ -733,6 +898,40 @@ const handleSetPending = async () => {
               </div>
             </div>
 
+            <!-- Informações complementares do cadastro -->
+            <div class="space-y-5">
+              <div class="flex items-center gap-2">
+                <FileText class="h-4 w-4 text-primary-500" />
+                <h3 class="text-xs font-bold text-gray-400 dark:text-dark-muted uppercase tracking-wider">
+                  Informações completas do lead
+                </h3>
+              </div>
+
+              <section
+                v-for="section in complementarySections"
+                :key="section.title"
+                class="space-y-2.5"
+              >
+                <h4 class="text-xs font-bold text-gray-700 dark:text-gray-200">
+                  {{ section.title }}
+                </h4>
+                <dl class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div
+                    v-for="item in section.items"
+                    :key="item.label"
+                    class="min-h-16 rounded-xl border border-gray-100 bg-gray-50/70 p-3 dark:border-dark-border dark:bg-dark-bg/60"
+                  >
+                    <dt class="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-dark-muted">
+                      {{ item.label }}
+                    </dt>
+                    <dd class="mt-1 break-words text-xs font-semibold text-gray-900 dark:text-white">
+                      {{ item.value }}
+                    </dd>
+                  </div>
+                </dl>
+              </section>
+            </div>
+
             <!-- Checklist & Galeria de Documentos Anexados -->
             <div class="space-y-3">
               <div class="flex items-center justify-between">
@@ -878,5 +1077,23 @@ const handleSetPending = async () => {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+.deal-option-enter-active,
+.deal-option-leave-active {
+  transition: opacity 220ms ease, transform 220ms ease;
+}
+
+.deal-option-enter-from,
+.deal-option-leave-to {
+  opacity: 0;
+  transform: translateY(-6px) scale(0.98);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .deal-option-enter-active,
+  .deal-option-leave-active {
+    transition-duration: 1ms;
+  }
 }
 </style>

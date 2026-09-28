@@ -63,6 +63,27 @@ export interface Cliente {
     statusdoc?: 'aguardando' | 'esperando' | 'aprovado' | 'rejeitado' | string | null;
     motivostatus?: string | null;
     cpf?: string | null;
+    modalidade?: 'compra' | 'aluguel' | 'agio' | null;
+    forma_pagamento?: 'a_vista' | 'financiamento' | null;
+    finalidade?: 'morar' | 'investir' | null;
+    quartos?: number | null;
+    orcamento_maximo?: number | null;
+    renda_familiar?: number | null;
+    valor_entrada?: number | null;
+    possui_fgts?: boolean | null;
+    saldo_fgts?: number | null;
+    compoe_renda?: boolean | null;
+    numero_compradores?: number | null;
+    prazo_interesse?: string | null;
+    temperatura?: 'quente' | 'morno' | 'nutricao' | 'sem_perfil_definido' | null;
+    motivo_temperatura?: string | null;
+    proxima_acao?: string | null;
+    melhor_horario_contato?: string | null;
+    imoveis_interesse?: number[] | null;
+    temperatura_atualizada_em?: string | null;
+    documentos_envio_iniciado_at?: string | null;
+    documentos_notificados_at?: string | null;
+    documentos_erro_envio?: string | null;
 }
 
 export interface Relatorio {

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { Clock, MessageCircle, Settings, User, X, Save, Plus, Trash2, Download, FileSpreadsheet } from 'lucide-vue-next'
+import { ref } from 'vue'
+import { Clock, Settings, User, X, Save, Download, FileSpreadsheet } from 'lucide-vue-next'
 import Sidebar from '~/components/Sidebar.vue'
 import { useSupabaseClient } from '#imports'
 
@@ -24,9 +24,6 @@ const daysOfWeek = [
 ]
 const clinicHours = ref<any[]>([])
 
-// State: clinica_perguntas
-const perguntas = ref<any[]>([])
-
 // State: sistemaConfiguracao
 const sistemaConfig = ref<any>({
   debounce: 5000,
@@ -41,15 +38,6 @@ const userProfile = ref({
   email: ''
 })
 
-// Helper: Get robust clinic_id
-const getMyClinicId = async () => {
-    let clinic_id = null;
-    const { data: rpcClinic } = await supabase.rpc('get_auth_clinic_id')
-    if (rpcClinic) clinic_id = rpcClinic
-    if (!clinic_id) throw new Error('Usuário sem imobiliária vinculada')
-    return clinic_id
-}
-
 
 // Action to Open Modal
 const openConfig = async (configType: string) => {
@@ -57,8 +45,6 @@ const openConfig = async (configType: string) => {
   isLoading.value = true
   
   try {
-    const clinicId = await getMyClinicId()
-
     if (configType === 'hours') {
       const { data, error } = await supabase.from('clinic_hours').select('*').order('day_of_week')
       if (error) throw error
@@ -69,7 +55,6 @@ const openConfig = async (configType: string) => {
         const existing = fetchedHours.find(h => h.day_of_week === day.id)
         return existing || {
           day_of_week: day.id,
-          clinic_id: clinicId,
           is_closed: day.id === 0 || day.id === 6,
           open_time: '08:00',
           close_time: '18:00',
@@ -77,17 +62,7 @@ const openConfig = async (configType: string) => {
           lunch_end: '13:00'
         }
       })
-    } 
-    
-    else if (configType === 'questions') {
-      const { data, error } = await supabase.from('clinica_perguntas').select('*').order('created_at', { ascending: true })
-      if (error) throw error
-      perguntas.value = data || []
-      // Se vier vazio, já adiciona um pra ajudar
-      if (perguntas.value.length === 0) addTask()
-    } 
-    
-    else if (configType === 'system') {
+    } else if (configType === 'system') {
       const { data, error } = await supabase.from('sistemaconfiguracao').select('*').limit(1).single()
       if (error && error.code !== 'PGRST116') throw error // PGRST116 is "No rows found"
       if (data) {
@@ -128,17 +103,24 @@ const formatTimeToHHMM = (dbTime: string | null) => {
 const saveHours = async () => {
   isSaving.value = true
   try {
-    const clinicId = await getMyClinicId()
-    
-    // Prepare data
-    const payload = clinicHours.value.map(h => ({
-      ...h,
-      clinic_id: clinicId
-    }))
+    for (const hour of clinicHours.value) {
+      const payload = {
+        day_of_week: hour.day_of_week,
+        is_closed: hour.is_closed,
+        open_time: hour.open_time,
+        close_time: hour.close_time,
+        lunch_start: hour.lunch_start,
+        lunch_end: hour.lunch_end
+      }
 
-    // Use upsert matching day_of_week and clinic_id
-    const { error } = await supabase.from('clinic_hours').upsert(payload, { onConflict: 'clinic_id,day_of_week' })
-    if (error) throw error
+      if (hour.id) {
+        const { error } = await supabase.from('clinic_hours').update(payload).eq('id', hour.id)
+        if (error) throw error
+      } else {
+        const { error } = await supabase.from('clinic_hours').insert(payload)
+        if (error) throw error
+      }
+    }
     
     alert('Horários salvos com sucesso!')
     closeModal()
@@ -147,60 +129,6 @@ const saveHours = async () => {
     alert('Erro ao salvar horários: ' + err.message)
   } finally {
     isSaving.value = false
-  }
-}
-
-// Perguntas helpers
-const addTask = () => {
-  perguntas.value.push({ pergunta: '', id: `temp-${Date.now()}` }) // Temporary ID
-}
-const removeTask = async (idx: number, id: string | number) => {
-  if (typeof id === 'number' || !String(id).startsWith('temp-')) {
-    const { error } = await supabase.from('clinica_perguntas').delete().eq('id', id)
-    if (error) {
-       alert('Erro ao deletar pergunta.')
-       return
-    }
-  }
-  perguntas.value.splice(idx, 1)
-}
-const saveQuestions = async () => {
-  isSaving.value = true
-  try {
-    const clinicId = await getMyClinicId()
-    
-    const updates = []
-    const inserts = []
-    
-    for (const p of perguntas.value) {
-       const raw: any = { clinic: clinicId, pergunta: p.pergunta }
-       if (typeof p.id === 'number') {
-           raw.id = p.id
-           updates.push(raw)
-       } else if (typeof p.id === 'string' && !p.id.startsWith('temp-')) {
-           raw.id = p.id
-           updates.push(raw)
-       } else {
-           inserts.push(raw)
-       }
-    }
-    
-    if (updates.length > 0) {
-        const { error } = await supabase.from('clinica_perguntas').upsert(updates)
-        if (error) throw error
-    }
-    if (inserts.length > 0) {
-        const { error } = await supabase.from('clinica_perguntas').insert(inserts)
-        if (error) throw error
-    }
-    
-    alert('Perguntas salvas com sucesso!')
-    closeModal()
-  } catch(err: any) {
-      console.error(err)
-      alert('Erro ao salvar perguntas: ' + err.message)
-  } finally {
-      isSaving.value = false
   }
 }
 
@@ -333,12 +261,6 @@ const options = [
     description: 'Defina os horários e dias de atendimento da sua operação.',
   },
   {
-    type: 'questions',
-    icon: MessageCircle,
-    title: 'Perguntas Qualificação',
-    description: 'Gerencie os scripts e perguntas base para qualificar seus leads.',
-  },
-  {
     type: 'system',
     icon: Settings,
     title: 'Sistema configuração',
@@ -367,7 +289,7 @@ const options = [
       <!-- Header -->
       <div class="mb-10">
         <h1 class="text-3xl font-bold font-serif text-gray-900 dark:text-white tracking-wide">Configurações do Sistema</h1>
-        <p class="text-gray-500 dark:text-gray-400 mt-2 font-light">Gerencie as preferências, horários e detalhes de perfil da sua loja/TIA.</p>
+        <p class="text-gray-500 dark:text-gray-400 mt-2 font-light">Gerencie as preferências, horários e detalhes de perfil da sua IA.</p>
       </div>
 
       <!-- Config Grid -->
@@ -405,7 +327,6 @@ const options = [
         <div class="px-4 sm:px-6 py-4 border-b border-gray-200 dark:border-white/10 flex items-center justify-between sticky top-0 bg-white dark:bg-dark-card z-10">
           <h2 class="text-xl font-serif font-bold text-gray-900 dark:text-white">
             <span v-if="activeModal === 'hours'">Horários de Funcionamento</span>
-            <span v-else-if="activeModal === 'questions'">Perguntas de Qualificação</span>
             <span v-else-if="activeModal === 'system'">Sistema Configuração</span>
             <span v-else-if="activeModal === 'downloads'">Download de Dados e Planilhas</span>
             <span v-else-if="activeModal === 'profile'">Editar Perfil</span>
@@ -457,26 +378,11 @@ const options = [
              </div>
           </div>
 
-          <!-- PERGUNTAS FORM -->
-          <div v-else-if="activeModal === 'questions'" class="space-y-4">
-            <button @click="addTask" class="mb-4 flex items-center gap-2 bg-primary-50 text-primary-600 dark:bg-primary-500/10 dark:text-primary-400 px-4 py-2 rounded-sm hover:bg-primary-100 transition-colors text-sm font-semibold uppercase tracking-widest w-full justify-center">
-               <Plus class="w-4 h-4" /> Adicionar Parâmetro de Pergunta
-            </button>
-            <div v-for="(p, idx) in perguntas" :key="p.id" class="flex items-center gap-3">
-              <span class="text-sm font-bold text-gray-300 dark:text-gray-600">{{ idx + 1 }}.</span>
-              <input v-model="p.pergunta" type="text" placeholder="Ex: Qual o plano de saúde do paciente?" class="flex-1 bg-white dark:bg-dark-surface border border-gray-200 dark:border-white/10 rounded-sm px-4 py-2.5 text-gray-900 dark:text-white focus:outline-none focus:border-primary-500 shadow-sm transition-all focus:shadow-md">
-              <button @click="removeTask(idx, p.id)" class="text-gray-300 hover:text-red-500 p-2 transition-colors">
-                <Trash2 class="w-5 h-5" />
-              </button>
-            </div>
-            <p v-if="perguntas.length === 0" class="text-center text-gray-400 py-10">Nenhuma pergunta cadastrada.</p>
-          </div>
-
           <!-- SISTEMA FORM -->
           <div v-else-if="activeModal === 'system'" class="space-y-6">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                <div>
-                 <label class="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-gray-400 mb-2">Nome da TIA (Fantasia)</label>
+                 <label class="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-gray-400 mb-2">Nome da IA</label>
                  <input v-model="sistemaConfig.nomeclinica" type="text" placeholder="Ex: ImplanteTech" class="w-full bg-white dark:bg-dark-surface border border-gray-200 dark:border-white/10 rounded-sm px-4 py-2.5 text-gray-900 dark:text-white focus:outline-none focus:border-primary-500 shadow-sm">
                </div>
                <div>
@@ -597,14 +503,6 @@ const options = [
            >
             <template v-if="isSaving"><div class="w-4 h-4 border-2 border-white border-t-transparent animate-spin rounded-full"></div></template>
             <template v-else><Save class="w-4 h-4" /> Salvar Horários</template>
-          </button>
-
-          <button 
-             v-else-if="activeModal === 'questions'" @click="saveQuestions"
-             :disabled="isSaving" class="flex items-center gap-2 px-5 py-2.5 bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold rounded-sm transition-colors shadow-luxury uppercase tracking-widest disabled:opacity-50"
-           >
-            <template v-if="isSaving"><div class="w-4 h-4 border-2 border-white border-t-transparent animate-spin rounded-full"></div></template>
-            <template v-else><Save class="w-4 h-4" /> Salvar Perguntas</template>
           </button>
 
           <button 

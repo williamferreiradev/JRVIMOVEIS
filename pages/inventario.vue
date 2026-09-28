@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import { Plus, Edit, Trash2, Search, Building, X, Save, UploadCloud } from 'lucide-vue-next'
+import { Plus, Edit, Trash2, Search, Building, X, Save, UploadCloud, Check } from 'lucide-vue-next'
 import { useSupabaseClient } from '#imports'
 import Sidebar from '~/components/Sidebar.vue'
 
@@ -22,7 +22,9 @@ const formData = ref({
   nome: '',
   valor: '',
   descricao: '',
-  url: ''
+  url: '',
+  agio: false,
+  aluguel: false
 })
 
 const selectedFile = ref<File | null>(null)
@@ -58,7 +60,7 @@ const filteredProperties = computed(() => {
 const openCreateModal = () => {
   modalMode.value = 'create'
   editingId.value = null
-  formData.value = { nome: '', valor: '', descricao: '', url: '' }
+  formData.value = { nome: '', valor: '', descricao: '', url: '', agio: false, aluguel: false }
   selectedFile.value = null
   previewImage.value = null
   showModal.value = true
@@ -91,7 +93,9 @@ const openEditModal = (property: any) => {
     nome: property.nome || '',
     valor: property.valor ? formatCurrency(property.valor) : '',
     descricao: property.descricao || '',
-    url: property.url || ''
+    url: property.url || '',
+    agio: Boolean(property.agio),
+    aluguel: Boolean(property.aluguel)
   }
   selectedFile.value = null
   previewImage.value = property.url || null
@@ -152,7 +156,9 @@ const handleSave = async () => {
       nome: formData.value.nome,
       valor: parseNumericPrice(formData.value.valor),
       descricao: formData.value.descricao,
-      url: finalImageUrl
+      url: finalImageUrl,
+      agio: formData.value.agio,
+      aluguel: formData.value.aluguel
     }
 
     if (modalMode.value === 'create') {
@@ -341,6 +347,54 @@ const confirmDelete = async (id: number) => {
               </div>
             </div>
 
+            <!-- Tipo de negociação -->
+            <fieldset class="md:col-span-2">
+              <legend class="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-gray-400 mb-2">
+                Tipo de negociação
+              </legend>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 min-h-12">
+                <Transition name="option-fade">
+                  <label
+                    v-if="!formData.aluguel"
+                    class="group relative flex min-h-12 cursor-pointer items-center gap-3 rounded-sm border px-4 py-3 transition-colors duration-200 focus-within:ring-2 focus-within:ring-primary-500 focus-within:ring-offset-2 dark:focus-within:ring-offset-dark-card"
+                    :class="formData.agio
+                      ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-500/15 dark:text-primary-300'
+                      : 'border-gray-200 bg-gray-50 text-gray-700 hover:border-primary-300 dark:border-white/10 dark:bg-dark-surface dark:text-gray-200 dark:hover:border-primary-500/60'"
+                  >
+                    <input v-model="formData.agio" type="checkbox" class="sr-only" aria-label="É ágio?">
+                    <span
+                      class="flex h-6 w-6 shrink-0 items-center justify-center rounded border transition-colors duration-200"
+                      :class="formData.agio ? 'border-primary-500 bg-primary-500 text-white' : 'border-gray-300 bg-white text-transparent dark:border-white/20 dark:bg-dark-card'"
+                      aria-hidden="true"
+                    >
+                      <Check class="h-4 w-4" :class="formData.agio ? 'scale-100' : 'scale-75'" />
+                    </span>
+                    <span class="text-sm font-semibold uppercase tracking-wider">É ágio?</span>
+                  </label>
+                </Transition>
+
+                <Transition name="option-fade">
+                  <label
+                    v-if="!formData.agio"
+                    class="group relative flex min-h-12 cursor-pointer items-center gap-3 rounded-sm border px-4 py-3 transition-colors duration-200 focus-within:ring-2 focus-within:ring-primary-500 focus-within:ring-offset-2 dark:focus-within:ring-offset-dark-card"
+                    :class="formData.aluguel
+                      ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-500/15 dark:text-primary-300'
+                      : 'border-gray-200 bg-gray-50 text-gray-700 hover:border-primary-300 dark:border-white/10 dark:bg-dark-surface dark:text-gray-200 dark:hover:border-primary-500/60'"
+                  >
+                    <input v-model="formData.aluguel" type="checkbox" class="sr-only" aria-label="É aluguel?">
+                    <span
+                      class="flex h-6 w-6 shrink-0 items-center justify-center rounded border transition-colors duration-200"
+                      :class="formData.aluguel ? 'border-primary-500 bg-primary-500 text-white' : 'border-gray-300 bg-white text-transparent dark:border-white/20 dark:bg-dark-card'"
+                      aria-hidden="true"
+                    >
+                      <Check class="h-4 w-4" :class="formData.aluguel ? 'scale-100' : 'scale-75'" />
+                    </span>
+                    <span class="text-sm font-semibold uppercase tracking-wider">É aluguel?</span>
+                  </label>
+                </Transition>
+              </div>
+            </fieldset>
+
             <!-- Descrição -->
             <div class="md:col-span-2">
               <label class="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-gray-400 mb-2">Descrição do Imóvel</label>
@@ -370,3 +424,23 @@ const confirmDelete = async (id: number) => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.option-fade-enter-active,
+.option-fade-leave-active {
+  transition: opacity 220ms ease, transform 220ms ease;
+}
+
+.option-fade-enter-from,
+.option-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-6px) scale(0.98);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .option-fade-enter-active,
+  .option-fade-leave-active {
+    transition-duration: 1ms;
+  }
+}
+</style>

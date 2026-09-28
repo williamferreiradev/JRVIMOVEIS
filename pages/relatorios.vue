@@ -3,7 +3,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { 
   BarChart3, TrendingUp, Users, Calendar, Download, 
   CheckCircle2, UserPlus, Bot, Handshake, Clock, 
-  Target, DollarSign, ChevronLeft, ChevronRight,
+  Target, ChevronLeft, ChevronRight, MessageSquare,
   AlertTriangle, Lightbulb, Star, ExternalLink, ChevronDown
 } from 'lucide-vue-next'
 import { useSupabaseClient } from '#imports'
@@ -22,6 +22,10 @@ const weekDropdownOpen = ref(false)
 const weeks = ref<any[]>([])
 const activityLog = ref<any[]>([])
 const dbActivities = ref<any[]>([])
+const hourlyActivity = ref<{ hour: number; count: number }[]>(
+  Array.from({ length: 24 }, (_, hour) => ({ hour, count: 0 }))
+)
+const hourlyLoading = ref(false)
 
 
 function getMonday(d: Date) {
@@ -210,10 +214,65 @@ const metricCards = computed(() => [
   { title: 'Total Leads', value: currentMetrics.value.totalLeads || 0, icon: Users, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-500/10', border: 'border-blue-100 dark:border-blue-500/20' },
   { title: 'Qualificados', value: currentMetrics.value.qualificados || 0, icon: Target, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-500/10', border: 'border-emerald-100 dark:border-emerald-500/20' },
   { title: 'Agendamentos', value: currentMetrics.value.agendamentos || 0, icon: Calendar, color: 'text-primary-600 dark:text-primary-400', bg: 'bg-primary-50 dark:bg-primary-500/10', border: 'border-primary-100 dark:border-primary-500/20' },
-  { title: 'Convertidos', value: currentMetrics.value.convertidos || 0, icon: Handshake, color: 'text-teal-600 dark:text-teal-400', bg: 'bg-teal-50 dark:bg-teal-500/10', border: 'border-teal-100 dark:border-teal-500/20' },
-  { title: 'Conversão', value: (currentMetrics.value.taxaConversao || 0) + '%', icon: TrendingUp, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-500/10', border: 'border-amber-100 dark:border-amber-500/20' },
-  { title: 'Receita', value: formatCurrency(currentMetrics.value.receita || 0), icon: DollarSign, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-500/10', border: 'border-green-100 dark:border-green-500/20' },
 ])
+
+const maxHourlyMessages = computed(() => Math.max(...hourlyActivity.value.map(item => item.count), 0))
+const totalMessages = computed(() => hourlyActivity.value.reduce((total, item) => total + item.count, 0))
+const busiestHours = computed(() => [...hourlyActivity.value]
+  .filter(item => item.count > 0)
+  .sort((a, b) => b.count - a.count || a.hour - b.hour)
+  .slice(0, 3)
+)
+
+const formatHour = (hour: number) => `${String(hour).padStart(2, '0')}:00–${String((hour + 1) % 24).padStart(2, '0')}:00`
+
+const aggregateHistoryByHour = (history: any[], start: Date, end: Date) => {
+  const counts = new Map<number, number>()
+  const hourFormatter = new Intl.DateTimeFormat('pt-BR', {
+    hour: '2-digit', hour12: false, timeZone: 'America/Sao_Paulo'
+  })
+
+  for (const row of history) {
+    const message = typeof row.message === 'string' ? (() => { try { return JSON.parse(row.message) } catch { return {} } })() : (row.message || {})
+    const payload = message.data || message
+    const rawDate = row.sent_at || row.created_at || payload.created_at || payload.timestamp || message.created_at || message.timestamp
+    if (!rawDate) continue
+    const date = new Date(rawDate)
+    if (Number.isNaN(date.getTime()) || date < start || date >= end) continue
+    const hour = Number(hourFormatter.format(date)) % 24
+    counts.set(hour, (counts.get(hour) || 0) + 1)
+  }
+
+  return Array.from({ length: 24 }, (_, hour) => ({ hour, count: counts.get(hour) || 0 }))
+}
+
+const fetchHourlyActivity = async () => {
+  const activeWeek = weeks.value.find(w => w.key === selectedWeek.value)
+  if (!activeWeek?.semana_inicio) return
+
+  hourlyLoading.value = true
+  try {
+    const start = new Date(`${activeWeek.semana_inicio}T00:00:00-03:00`)
+    const end = new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000)
+    const { data: history, error: historyError } = await supabase
+      .from('leads')
+      .select('ultima_mensagem_at')
+      .not('ultima_mensagem_at', 'is', null)
+      .gte('ultima_mensagem_at', start.toISOString())
+      .lt('ultima_mensagem_at', end.toISOString())
+    if (historyError) throw historyError
+    hourlyActivity.value = aggregateHistoryByHour(
+      (history || []).map((item: any) => ({ sent_at: item.ultima_mensagem_at })),
+      start,
+      end
+    )
+  } catch (error) {
+    console.warn('Não foi possível carregar os horários das mensagens:', error)
+    hourlyActivity.value = Array.from({ length: 24 }, (_, hour) => ({ hour, count: 0 }))
+  } finally {
+    hourlyLoading.value = false
+  }
+}
 
 function formatCurrency(val: number) {
   if (val >= 1000) return 'R$ ' + (val / 1000).toFixed(val % 1000 === 0 ? 0 : 1) + 'k'
@@ -438,7 +497,10 @@ const fetchData = async () => {
 }
 
 // Reset activity page on week change
-watch(selectedWeek, () => { activityPage.value = 1 })
+watch(selectedWeek, () => {
+  activityPage.value = 1
+  fetchHourlyActivity()
+})
 
 onMounted(() => { fetchData() })
 </script>
@@ -516,7 +578,7 @@ onMounted(() => { fetchData() })
         </div>
 
         <!-- Metric Cards Grid -->
-        <div class="grid grid-cols-1 min-[380px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4 mb-6">
+        <div class="grid grid-cols-1 min-[380px]:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 mb-6">
           <div
             v-for="card in metricCards"
             :key="card.title"
@@ -531,6 +593,66 @@ onMounted(() => { fetchData() })
             <p class="text-2xl font-bold text-gray-900 dark:text-white">{{ card.value }}</p>
           </div>
         </div>
+
+        <!-- Message activity by hour -->
+        <section class="bg-white dark:bg-dark-surface border border-gray-100 dark:border-dark-border rounded-xl p-5 sm:p-6 mb-6">
+          <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-5">
+            <div>
+              <h2 class="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <MessageSquare class="w-4 h-4 text-primary-500" /> Horários com mais mensagens
+              </h2>
+              <p class="text-[11px] text-gray-400 dark:text-dark-muted mt-1">Horário da última mensagem de cada lead na semana selecionada, no horário de Brasília.</p>
+            </div>
+            <div class="sm:text-right">
+              <p class="text-2xl font-bold tabular-nums text-gray-900 dark:text-white">{{ totalMessages }}</p>
+              <p class="text-[10px] font-semibold uppercase tracking-wider text-gray-400">leads com mensagem</p>
+            </div>
+          </div>
+
+          <div v-if="hourlyLoading" class="h-44 flex items-center justify-center">
+            <div class="animate-spin rounded-full h-7 w-7 border-b-2 border-primary-500"></div>
+          </div>
+
+          <div v-else-if="totalMessages > 0" class="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_280px] gap-6">
+            <div class="h-48 overflow-x-auto" aria-label="Gráfico de mensagens por horário">
+              <div class="h-full min-w-[680px] flex items-end gap-1.5 border-b border-gray-200 dark:border-dark-border px-1">
+                <div
+                  v-for="item in hourlyActivity"
+                  :key="item.hour"
+                  class="group relative flex-1 h-full flex flex-col justify-end items-center"
+                  :title="`${formatHour(item.hour)}: ${item.count} lead${item.count === 1 ? '' : 's'}`"
+                >
+                  <span class="mb-1 text-[9px] font-bold tabular-nums text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity">{{ item.count }}</span>
+                  <div
+                    class="w-full max-w-5 rounded-t bg-primary-500/80 hover:bg-primary-500 transition-[height,background-color] duration-300"
+                    :style="{ height: `${maxHourlyMessages ? Math.max((item.count / maxHourlyMessages) * 82, item.count ? 6 : 2) : 2}%` }"
+                  ></div>
+                  <span class="h-5 mt-1 text-[9px] tabular-nums text-gray-400">{{ item.hour % 2 === 0 ? String(item.hour).padStart(2, '0') + 'h' : '' }}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="space-y-2.5">
+              <p class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Picos de atendimento</p>
+              <div
+                v-for="(item, index) in busiestHours"
+                :key="item.hour"
+                class="flex items-center gap-3 rounded-xl border border-primary-100 bg-primary-50/60 p-3 dark:border-primary-500/20 dark:bg-primary-500/5"
+              >
+                <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-500 text-xs font-bold text-white">{{ Number(index) + 1 }}</span>
+                <div>
+                  <p class="text-sm font-bold text-gray-900 dark:text-white">{{ formatHour(item.hour) }}</p>
+                  <p class="text-xs text-gray-500 dark:text-dark-muted">{{ item.count }} lead{{ item.count === 1 ? '' : 's' }}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-else class="h-36 flex flex-col items-center justify-center text-center rounded-xl bg-gray-50/70 dark:bg-dark-bg/50">
+            <Clock class="w-8 h-8 text-gray-300 dark:text-gray-600 mb-2" />
+            <p class="text-sm font-semibold text-gray-600 dark:text-gray-300">Nenhuma mensagem encontrada nesta semana</p>
+          </div>
+        </section>
 
         <!-- Two Column Layout: Report + Charts -->
         <div class="grid grid-cols-1 xl:grid-cols-5 gap-6 mb-6">
