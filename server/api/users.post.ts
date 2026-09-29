@@ -1,5 +1,4 @@
-import { serverSupabaseServiceRole } from '#supabase/server'
-import { requireUserAdmin } from '../utils/requireUserAdmin'
+import { serverSupabaseServiceRole, serverSupabaseUser } from '#supabase/server'
 
 interface CreateUserBody {
   name?: string
@@ -8,7 +7,11 @@ interface CreateUserBody {
 }
 
 export default defineEventHandler(async (event) => {
-  await requireUserAdmin(event)
+  const currentUser = await serverSupabaseUser(event)
+
+  if (!currentUser) {
+    throw createError({ statusCode: 401, statusMessage: 'Sessão não autenticada' })
+  }
 
   const body = await readBody<CreateUserBody>(event)
   const name = body.name?.trim()

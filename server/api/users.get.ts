@@ -1,8 +1,11 @@
-import { serverSupabaseServiceRole } from '#supabase/server'
-import { requireUserAdmin } from '../utils/requireUserAdmin'
+import { serverSupabaseServiceRole, serverSupabaseUser } from '#supabase/server'
 
 export default defineEventHandler(async (event) => {
-  await requireUserAdmin(event)
+  const currentUser = await serverSupabaseUser(event)
+
+  if (!currentUser) {
+    throw createError({ statusCode: 401, statusMessage: 'Sessão não autenticada' })
+  }
 
   const adminClient = serverSupabaseServiceRole(event)
   const users = []
