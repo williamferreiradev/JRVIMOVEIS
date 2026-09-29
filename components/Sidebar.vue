@@ -7,6 +7,7 @@ import {
   MessageSquare, 
   Users, 
   UserCircle, 
+  UserCog,
   BarChart3, 
   LogOut, 
   Building, 
@@ -118,6 +119,7 @@ const navigation = computed(() => [
   ]},
   { name: 'ADMINISTRAÇÃO', items: [
     { name: 'Catálogo Público', icon: Globe, route: '#', badge: 'PRO', disabled: true },
+    { name: 'Usuários', icon: UserCog, route: '/usuarios' },
     { name: 'Configurações', icon: Settings, route: '/configuracoes' },
   ]}
 ])
