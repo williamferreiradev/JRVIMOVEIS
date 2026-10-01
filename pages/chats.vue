@@ -128,6 +128,11 @@ const parseMessage = (msgObj: any) => {
         return { text: parsed.content, isSystem: false, systemAction: '', type: 'text' }
       }
 
+      // Payload JSON do WhatsApp via Evolution/Z-API (tem content_type e message)
+      if (typeof parsed?.message === 'string') {
+        return { text: parsed.message, isSystem: false, systemAction: '', type: 'text' }
+      }
+
       // Também suporta o formato de content blocks usado por algumas
       // versões do LangChain/OpenAI.
       if (Array.isArray(parsed)) {
