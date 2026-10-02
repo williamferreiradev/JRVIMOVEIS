@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
-import { Plus, Edit, Trash2, Search, Building, X, Save, UploadCloud, Check } from 'lucide-vue-next'
+import { ref, onMounted, computed, watch } from 'vue'
+import { Plus, Edit, Trash2, Search, Building, X, Save, UploadCloud, Check, ChevronLeft, ChevronRight } from 'lucide-vue-next'
 import { useSupabaseClient } from '#imports'
 import Sidebar from '~/components/Sidebar.vue'
 
@@ -34,7 +34,7 @@ const fileInput = ref<HTMLInputElement | null>(null)
 const fetchProperties = async () => {
   loadingList.value = true
   try {
-    const { data, error } = await supabase.from('fotos_pneus').select('*').order('created_at', { ascending: false })
+    const { data, error } = await supabase.from('imoveis').select('*').order('created_at', { ascending: false })
     if (error) throw error
     properties.value = data || []
   } catch (error) {
@@ -56,6 +56,30 @@ const filteredProperties = computed(() => {
     p.descricao?.toLowerCase().includes(query)
   )
 })
+
+const currentPage = ref(1)
+const itemsPerPage = 5
+
+watch(searchQuery, () => {
+  currentPage.value = 1
+})
+
+const paginatedProperties = computed(() => {
+  const start = (currentPage.value - 1) * itemsPerPage
+  return filteredProperties.value.slice(start, start + itemsPerPage)
+})
+
+const totalPages = computed(() => {
+  return Math.ceil(filteredProperties.value.length / itemsPerPage)
+})
+
+const nextPage = () => {
+  if (currentPage.value < totalPages.value) currentPage.value++
+}
+
+const prevPage = () => {
+  if (currentPage.value > 1) currentPage.value--
+}
 
 const openCreateModal = () => {
   modalMode.value = 'create'
@@ -152,7 +176,7 @@ const handleSave = async () => {
       finalImageUrl = publicUrlData.publicUrl
     }
 
-    const payload = {
+    const payload: any = {
       nome: formData.value.nome,
       valor: parseNumericPrice(formData.value.valor),
       descricao: formData.value.descricao,
@@ -162,10 +186,11 @@ const handleSave = async () => {
     }
 
     if (modalMode.value === 'create') {
-      const { error } = await supabase.from('fotos_pneus').insert(payload)
+      payload.id_local = Date.now()
+      const { error } = await supabase.from('imoveis').insert(payload)
       if (error) throw error
     } else if (modalMode.value === 'edit' && editingId.value) {
-      const { error } = await supabase.from('fotos_pneus').update(payload).eq('id', editingId.value)
+      const { error } = await supabase.from('imoveis').update(payload).eq('id', editingId.value)
       if (error) throw error
     }
     
@@ -182,7 +207,7 @@ const handleSave = async () => {
 const confirmDelete = async (id: number) => {
   if (confirm('Tem certeza que deseja excluir este imóvel? Esta ação não pode ser desfeita.')) {
     try {
-      const { error } = await supabase.from('fotos_pneus').delete().eq('id', id)
+      const { error } = await supabase.from('imoveis').delete().eq('id', id)
       if (error) throw error
       properties.value = properties.value.filter(p => p.id !== id)
     } catch (e) {
@@ -244,7 +269,7 @@ const confirmDelete = async (id: number) => {
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-200 dark:divide-white/5 text-gray-600 dark:text-gray-300 text-sm">
-              <tr v-for="property in filteredProperties" :key="property.id" class="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors group">
+              <tr v-for="property in paginatedProperties" :key="property.id" class="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors group">
                 <td class="py-4 px-6">
                   <div class="flex items-center gap-4">
                     <div class="w-16 h-12 rounded-sm overflow-hidden border border-gray-200 dark:border-white/10 shrink-0 bg-gray-100 flex items-center justify-center text-gray-400">
@@ -275,7 +300,7 @@ const confirmDelete = async (id: number) => {
                   </div>
                 </td>
               </tr>
-              <tr v-if="!loadingList && filteredProperties.length === 0">
+              <tr v-if="!loadingList && paginatedProperties.length === 0">
                 <td colspan="4" class="py-12 text-center text-gray-400 dark:text-gray-500">
                   <Building class="w-12 h-12 mx-auto mb-4 opacity-20" />
                   <p>Nenhum imóvel cadastrado ou encontrado.</p>
@@ -283,6 +308,24 @@ const confirmDelete = async (id: number) => {
               </tr>
             </tbody>
           </table>
+        </div>
+      </div>
+
+      <!-- Pagination -->
+      <div v-if="totalPages > 1" class="flex items-center justify-between mt-4 px-2">
+        <p class="text-sm text-gray-500 dark:text-gray-400">
+          Mostrando {{ ((currentPage - 1) * itemsPerPage) + 1 }} a {{ Math.min(currentPage * itemsPerPage, filteredProperties.length) }} de {{ filteredProperties.length }} imóveis
+        </p>
+        <div class="flex items-center gap-2">
+          <button @click="prevPage" :disabled="currentPage === 1" class="p-2 border border-gray-200 dark:border-white/10 rounded-sm hover:bg-gray-50 dark:hover:bg-white/5 disabled:opacity-50 transition-colors text-gray-600 dark:text-gray-300">
+            <ChevronLeft class="w-4 h-4" />
+          </button>
+          <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+            Página {{ currentPage }} de {{ totalPages }}
+          </span>
+          <button @click="nextPage" :disabled="currentPage === totalPages" class="p-2 border border-gray-200 dark:border-white/10 rounded-sm hover:bg-gray-50 dark:hover:bg-white/5 disabled:opacity-50 transition-colors text-gray-600 dark:text-gray-300">
+            <ChevronRight class="w-4 h-4" />
+          </button>
         </div>
       </div>
     </main>
